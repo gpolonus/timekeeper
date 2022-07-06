@@ -1,70 +1,110 @@
 <script>
-	export let currentTask = localStorage.getItem('currentTask') || 'nothing'
 
 	export let tasks = JSON.parse(localStorage.getItem('tasks') || '[]') || []
 
 	const formatDate = (d = new Date()) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
 	let savedLines = JSON.parse(localStorage.getItem('savedLines') || '{}') || {};
-	let lines = savedLines[formatDate()] || {}
+	let lines = savedLines[formatDate()] || []
 
-	$: startTime = new Date().getTime() - (lines[currentTask] || 0)
+	$: line = lines.length && !lines[lines.length - 1].end
+			? lines[lines.length - 1]
+			: { start: null, task: null }
+	$: startTime = line.start
+	$: currentTask = line.task
 
-	const formatTime = (interval = 0) => {
-		const d = interval || (new Date().getTime() - startTime)
+	const formatInterval = (startTime, endTime = new Date().getTime()) => {
+		const d = endTime - startTime
 		const h = '' + Math.floor(d / (60*1000*60))
 		const m = '' + Math.floor((d - h*60*1000*60) / (1000*60))
 		const s = '' + Math.floor((d - h*60*1000*60 - m*1000*60) / 1000)
 		return `${h}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`
 	}
 
-	export let time = '0:00:00'
-	const interval = setInterval(() => {
-		time = formatTime()
-	}, 1000);
+	let time = '0:00:00'
+	let totalTime = '0:00:00'
+	let intervalId;
+	const start = () => {
+		intervalId = setInterval(() => {
+			time = formatInterval(startTime)
+			totalTime = formatInterval(currentTotalStartTime)
+		}, 1000);
+	}
 
-	export let addTaskValue = ''
+	let addTaskValue = ''
 
-	export const addTask = () => {
+	const addTask = () => {
 		const newTasks = [...tasks, addTaskValue]
 		addTaskValue = ''
 		localStorage.setItem('tasks', JSON.stringify(newTasks))
 		tasks = newTasks;
 	}
 
-	export const changeTask = (currentTaskValue) => {
-		if (currentTaskValue === currentTask) return;
+	const changeTask = (newTaskValue) => {
+		if (newTaskValue === currentTask) return;
 		const d = new Date().getTime()
-		const timeSpent = d - startTime
-		lines[currentTask] = timeSpent
-		localStorage.setItem('lines', JSON.stringify(lines))
-		localStorage.setItem('currentTask', currentTaskValue)
-		currentTask = currentTaskValue
-		// startTime = d - (lines[currentTaskValue] || 0)
-		time = formatTime(timeSpent)
-	}
 
-	const reset = () => {
-		localStorage.setItem('lines', '{}')
-		lines = {}
-	}
+		if (currentTask) {
+			lines[lines.length - 1].end = d
+		}
 
-	export const save = () => {
-		const d = new Date()
-		savedLines[formatDate(d)] = lines;
+		lines = [
+			...lines,
+			{ start: d, task: newTaskValue }
+		]
+
+		savedLines[formatDate()] = lines;
 		localStorage.setItem('savedLines', JSON.stringify(savedLines))
+
+		if (intervalId === null) {
+			start()
+		}
 	}
+
+	const stop = () => {
+		time = '0:00:00'
+		totalTime = '0:00:00'
+		if (currentTask) {
+			const d = new Date().getTime()
+			lines[lines.length - 1].end = d;
+			lines = [ ...lines ]
+
+			savedLines[formatDate()] = lines;
+			localStorage.setItem('savedLines', JSON.stringify(savedLines))
+		}
+
+		clearInterval(intervalId)
+		intervalId = null
+	}
+
+	function reset() {
+		localStorage.setItem('savedLines', '{}')
+		savedLines = {}
+	}
+
+	const timeSpentOnTask = (currentTask = currentTask, lines = lines) =>
+		lines.filter(l => l.task === currentTask && l.end).reduce((ac, l) => ac + (l.end - l.start), 0)
+
+	$: currentTotalStartTime = (startTime || 0) - timeSpentOnTask(currentTask, lines)
 </script>
 
 <svelte:head>
 	<title>Time Keeper</title>
 </svelte:head>
 
+{(currentTask && start()) || ''}
+
 <main>
 	<div>
-		<h2>You've spent</h2>
-		<h1>{time}</h1>
-		<h2>on {currentTask}</h2>
+		{#if currentTask}
+			<h2>You've currently spent</h2>
+			<h1>{time}</h1>
+			<h2>on {currentTask}</h2>
+			<h2>and {totalTime} total</h2>
+		{:else}
+			<h2>You're currently doing nothing</h2>
+			<h1>Pick a Task</h1>
+		{/if}
 	</div>
 	<div class="select-task">
 		<h2>Select Task</h2>
@@ -84,13 +124,14 @@
 	</div>
 	<div>
 		<h2>Saved Lines</h2>
-		<button on:click={save}>Save Lines</button>
 		{#each Object.entries(savedLines) as [ date, lines ]}
 			<div>{date}</div>
-			{#each Object.entries(lines) as entry}
-				<div>{entry[0]}: {formatTime(entry[1])}</div>
+			{#each lines as { task, start, end }}
+				<div>{task}: </div>
+				<div>Difference: {formatInterval(start, end)}</div>
 			{/each}
 		{/each}
+		<button on:click={stop}>Stop</button>
 		<button on:click={reset}>Reset</button>
 	</div>
 </main>
