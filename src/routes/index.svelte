@@ -1,29 +1,34 @@
-<script>
+<script lang="ts">
 
-	export let tasks = JSON.parse(localStorage.getItem('tasks') || '[]') || []
+	// let localStorage = typeof 'localStorage' === 'object'
+	// 	? localStorage
+	// 	: { getItem: ()=>{}, setItem: ()=>{} }
+
+	let tasks = JSON.parse(localStorage.getItem('tasks') || '[]') || []
 
 	const formatDate = (d = new Date()) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
-	let savedLines = JSON.parse(localStorage.getItem('savedLines') || '{}') || {};
-	let lines = savedLines[formatDate()] || []
+	type Line = { start: number, end: number, task: string }
+	let savedLines: {[index: string]: Line[]} = JSON.parse(localStorage.getItem('savedLines') || '{}') || {};
+	let lines: Line[] = savedLines[formatDate()] || []
 
 	$: line = lines.length && !lines[lines.length - 1].end
 			? lines[lines.length - 1]
-			: { start: null, task: null }
+			: { start: 0, task: '' }
 	$: startTime = line.start
 	$: currentTask = line.task
 
-	const formatInterval = (startTime, endTime = new Date().getTime()) => {
+	const formatInterval = (startTime: number, endTime = new Date().getTime()) => {
 		const d = endTime - startTime
-		const h = '' + Math.floor(d / (60*1000*60))
-		const m = '' + Math.floor((d - h*60*1000*60) / (1000*60))
-		const s = '' + Math.floor((d - h*60*1000*60 - m*1000*60) / 1000)
-		return `${h}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`
+		const h = Math.floor(d / (60*1000*60))
+		const m = Math.floor((d - h*60*1000*60) / (1000*60))
+		const s = Math.floor((d - h*60*1000*60 - m*1000*60) / 1000)
+		return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 	}
 
 	let time = '0:00:00'
 	let totalTime = '0:00:00'
-	let intervalId;
+	let intervalId: NodeJS.Timer | null;
 	const start = () => {
 		intervalId = setInterval(() => {
 			time = formatInterval(startTime)
@@ -40,7 +45,7 @@
 		tasks = newTasks;
 	}
 
-	const changeTask = (newTaskValue) => {
+	const changeTask = (newTaskValue: string) => {
 		if (newTaskValue === currentTask) return;
 		const d = new Date().getTime()
 
@@ -50,7 +55,7 @@
 
 		lines = [
 			...lines,
-			{ start: d, task: newTaskValue }
+			{ start: d, task: newTaskValue, end: 0 }
 		]
 
 		savedLines[formatDate()] = lines;
@@ -73,7 +78,7 @@
 			localStorage.setItem('savedLines', JSON.stringify(savedLines))
 		}
 
-		clearInterval(intervalId)
+		intervalId && clearInterval(intervalId)
 		intervalId = null
 	}
 
@@ -82,8 +87,8 @@
 		savedLines = {}
 	}
 
-	const timeSpentOnTask = (currentTask = currentTask, lines = lines) =>
-		lines.filter(l => l.task === currentTask && l.end).reduce((ac, l) => ac + (l.end - l.start), 0)
+	const timeSpentOnTask = (ct = currentTask, ls = lines) =>
+		ls.filter(l => l.task === ct && l.end).reduce((ac, { start, end } = { start: 0, end: 0, task: '' }) => ac + (end - start), 0)
 
 	$: currentTotalStartTime = (startTime || 0) - timeSpentOnTask(currentTask, lines)
 </script>
