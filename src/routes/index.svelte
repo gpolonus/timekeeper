@@ -12,7 +12,7 @@
 	let savedLines: {[index: string]: Line[]} = JSON.parse(localStorage.getItem('savedLines') || '{}') || {};
 	let lines: Line[] = savedLines[formatDate()] || []
 
-	$: line = lines.length && !lines[lines.length - 1].end
+	$: line = (lines.length && !lines[lines.length - 1].end)
 			? lines[lines.length - 1]
 			: { start: 0, task: '' }
 	$: startTime = line.start
@@ -87,8 +87,10 @@
 		savedLines = {}
 	}
 
-	const timeSpentOnTask = (ct = currentTask, ls = lines) =>
-		ls.filter(l => l.task === ct && l.end).reduce((ac, { start, end } = { start: 0, end: 0, task: '' }) => ac + (end - start), 0)
+	const timeSpentOnTask = (currentTask: string, lines: Line[]) =>
+		lines
+			.filter(l => l.task === currentTask && l.end)
+			.reduce((ac, { start, end } = { start: 0, end: 0, task: '' }) => ac + (end - start), 0)
 
 	$: currentTotalStartTime = (startTime || 0) - timeSpentOnTask(currentTask, lines)
 </script>
